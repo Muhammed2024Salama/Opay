@@ -23,7 +23,6 @@ class InitializePaymentRequest extends FormRequest
     {
         return [
             'amount'      => 'required|numeric|min:1|max:100000',
-            'reference'   => 'required|string|unique:payments,reference',
             'user_id'     => 'required|integer',
             'user_name'   => 'required|string|max:255',
             'user_email'  => 'required|email|max:255',
