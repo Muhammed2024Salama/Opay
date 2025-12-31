@@ -25,5 +25,11 @@ interface OpayInterface
      * Initialize payment with Opay gateway
      */
     public function initializePaymentWithGateway(array $data): array;
+
+    /**
+     * Query payment status from OPay server
+     * This is the source of truth for payment status (Server-to-Server verification)
+     */
+    public function queryPaymentStatus(string $orderNo, string $reference): array;
 }
 
