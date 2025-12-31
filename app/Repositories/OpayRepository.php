@@ -91,6 +91,7 @@ class OpayRepository implements OpayInterface
         $payload = [
             'orderNo' => $orderNo,
             'reference' => $reference,
+            'country'   => 'EG',
         ];
 
         $response = Http::timeout(15)
@@ -121,4 +122,3 @@ class OpayRepository implements OpayInterface
         return $result;
     }
 }
-

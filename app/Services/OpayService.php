@@ -61,7 +61,6 @@ class OpayService
         );
     }
 
-
     private function verifyCallbackSignature(string $rawBody, string $receivedSignature): bool
     {
         if (app()->environment('local') && config('opay.skip_signature_verification', false)) {
@@ -89,9 +88,9 @@ class OpayService
             ]);
             if (!app()->environment('production')) {
                 Log::debug('OPay signature details', [
-                    'received_signature' => $receivedSignature,
+                    'received_signature'   => $receivedSignature,
                     'calculated_signature' => $calculatedSignature,
-                    'raw_body_preview' => substr($rawBody, 0, 100) . '...'
+                    'raw_body_preview'     => substr($rawBody, 0, 100) . '...'
                 ]);
             }
         } else {
@@ -126,14 +125,6 @@ class OpayService
 
         if (!$receivedSignature) {
             Log::warning('OPay callback missing signature in header');
-
-            if (!app()->environment('production')) {
-                Log::debug('OPay callback headers', [
-                    'headers'           => request()->headers->all(),
-                    'available_headers' => array_keys(request()->headers->all())
-                ]);
-            }
-
             return ResponseHelper::error('error', 'Invalid callback structure: signature header is missing', 400);
         }
 
@@ -146,11 +137,7 @@ class OpayService
         }
 
         if (empty($rawBody)) {
-            $rawBody = json_encode(
-                $requestData,
-                JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE
-            );
-
+            $rawBody = json_encode($requestData, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
             Log::warning('OPay callback: Using reconstructed raw body (may not match OPay signature)');
         }
 
@@ -176,13 +163,6 @@ class OpayService
         }
 
         if ($payment->status === 'success') {
-            if (!app()->environment('production')) {
-                Log::debug('OPay callback ignored: Payment already successful', [
-                    'reference' => $reference,
-                    'order_no'  => $orderNo
-                ]);
-            }
-
             return ResponseHelper::success(
                 'success',
                 'Payment already processed',
@@ -191,35 +171,13 @@ class OpayService
         }
 
         try {
-            if (!app()->environment('production')) {
-                Log::debug('Querying OPay Payment Status API', [
-                    'reference' => $reference,
-                    'order_no'  => $orderNo
-                ]);
-            }
-
             $opayResponse = $this->opayRepository->queryPaymentStatus($orderNo, $reference);
 
-            if (!isset($opayResponse['data'])) {
-                Log::error('OPay query payment status: Invalid response structure', [
-                    'response' => $opayResponse
-                ]);
-
-                return ResponseHelper::error('error', 'Invalid response from OPay API', 500);
-            }
-
-            $opayData = $opayResponse['data'];
+            $opayData = $opayResponse['data'] ?? [];
 
             $validationErrors = $this->validatePaymentData($payment, $opayData, $payload);
 
             if (!empty($validationErrors)) {
-                Log::warning('OPay payment data validation failed', [
-                    'reference'        => $reference,
-                    'errors'           => $validationErrors,
-                    'callback_data'    => $payload,
-                    'query_api_data'   => $opayData
-                ]);
-
                 return ResponseHelper::error(
                     'error',
                     'Payment data validation failed: ' . implode(', ', $validationErrors),
@@ -228,12 +186,11 @@ class OpayService
             }
 
             $opayStatus = strtoupper($opayData['status'] ?? '');
-
             $status = match ($opayStatus) {
-                'SUCCESS'        => 'success',
-                'PENDING'        => 'pending',
-                'FAIL', 'CLOSE'  => 'failed',
-                default          => 'failed',
+                'SUCCESS'       => 'success',
+                'PENDING'       => 'pending',
+                'FAIL', 'CLOSE' => 'failed',
+                default         => 'failed',
             };
 
             $payment = $this->opayRepository->updatePaymentByReference(
@@ -248,14 +205,6 @@ class OpayService
                 ]
             );
 
-            if (!app()->environment('production')) {
-                Log::debug('OPay payment updated successfully', [
-                    'reference' => $reference,
-                    'status'    => $status,
-                    'source'    => 'query_api'
-                ]);
-            }
-
             return ResponseHelper::success(
                 'success',
                 'Payment updated successfully',
@@ -263,12 +212,6 @@ class OpayService
             );
 
         } catch (\Exception $e) {
-            Log::error('OPay query payment status failed', [
-                'reference' => $reference,
-                'order_no'  => $orderNo,
-                'error'     => $e->getMessage()
-            ]);
-
             return ResponseHelper::error(
                 'error',
                 'Failed to verify payment status: ' . $e->getMessage(),
@@ -287,7 +230,9 @@ class OpayService
         }
 
         $opayAmount = $opayData['amount']['total'] ?? $opayData['amount'] ?? null;
-        if ($opayAmount && (int)$opayAmount !== (int)$payment->amount) {
+        if ($opayAmount === null) {
+            $errors[] = "Amount is empty";
+        } elseif ((int)$opayAmount !== (int)$payment->amount) {
             $errors[] = "Amount mismatch: expected {$payment->amount}, got {$opayAmount}";
         }
 
