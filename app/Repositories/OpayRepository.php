@@ -69,7 +69,7 @@ class OpayRepository implements OpayInterface
         $response = Http::timeout(15)
             ->withHeaders([
                 'Authorization' => 'Bearer ' . config('opay.secret_key'),
-                'MerchantId'    => config('opay.merchant_code'),
+                'MerchantId'    => config('opay.merchant_id'),
                 'Content-Type'  => 'application/json',
             ])
             ->post(
@@ -84,6 +84,41 @@ class OpayRepository implements OpayInterface
         }
 
         return $response->json();
+    }
+
+    public function queryPaymentStatus(string $orderNo, string $reference): array
+    {
+        $payload = [
+            'orderNo' => $orderNo,
+            'reference' => $reference,
+        ];
+
+        $response = Http::timeout(15)
+            ->withHeaders([
+                'Authorization' => 'Bearer ' . config('opay.secret_key'),
+                'MerchantId'    => config('opay.merchant_id'),
+                'Content-Type'  => 'application/json',
+            ])
+            ->post(
+                config('opay.base_url') . '/api/v1/international/cashier/status',
+                $payload
+            );
+
+        if (!$response->successful()) {
+            throw new Exception(
+                $response->json()['message'] ?? 'OPay query payment status API error'
+            );
+        }
+
+        $result = $response->json();
+
+        if (isset($result['code']) && $result['code'] !== '00000') {
+            throw new Exception(
+                $result['message'] ?? 'OPay query payment status failed'
+            );
+        }
+
+        return $result;
     }
 }
 
